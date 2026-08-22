@@ -1,6 +1,6 @@
 {
   "name": "multigame-pears",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Plataforma de juegos P2P para la terminal, sobre Pear y Bare",
   "private": true,
   "bin": "bin.mjs",
