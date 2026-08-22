@@ -55,9 +55,15 @@ async function until(fn, ms, what) {
 // desvia de la UI el test deja de valer, asi que se mantiene deliberadamente
 // parecido.
 class Player {
-  constructor(name, game, room, bootstrap) {
+  // `latency` demora la ENTREGA de los inputs del rival sin tocar el transporte:
+  // simula un enlace lento sobre la conexion real. Es la unica forma de que el
+  // rollback se ejercite en un test e2e — sobre loopback los inputs llegan antes
+  // de que el receptor alcance ese tick y nunca hay que rebobinar (medido: 0
+  // rollbacks).
+  constructor(name, game, room, bootstrap, { latency = 0 } = {}) {
     this.name = name
     this.game = game
+    this.latency = latency
     this.lobby = new Lobby(game.id, room, { bootstrap, bluetooth: false })
     this.state = null
     this.chat = []
@@ -113,6 +119,16 @@ class Player {
       this._start(msg.arena ? arenas.build(msg.arena) : null)
       return
     }
+    // solo los inputs se demoran: el sync tiene que seguir midiendo de verdad
+    if (this.latency > 0 && msg.t === protocol.T.INPUT) {
+      const timer = setTimeout(() => this._deliver(msg), this.latency)
+      if (timer.unref) timer.unref()
+      return
+    }
+    this._deliver(msg)
+  }
+
+  _deliver(msg) {
     if (this.state === null) return
     this._apply(this.game.onPeerMsg(this.state, msg))
   }
@@ -140,19 +156,46 @@ class Player {
   }
 }
 
-// El tick mas reciente que las dos simulaciones tengan en su historial. Los
-// relojes no arrancan juntos, asi que el rango comun se busca en vez de asumirse.
-function commonTick(a, b) {
-  const top = Math.min(a.state.net.tick, b.state.net.tick)
-  for (let tick = top; tick > top - 60 && tick >= 0; tick--) {
-    if (a.state.net.hashAt(tick) !== null && b.state.net.hashAt(tick) !== null) return tick
+// Cuantos ticks del final NO se comparan.
+//
+// Que las dos pantallas difieran en el borde es inherente a un netcode con
+// prediccion: mi hash del tick actual no incluye un input del rival que todavia
+// esta en vuelo, y el rollback lo corrige cuando llega. Lo que seria un bug es
+// una divergencia PERMANENTE. Comparar el ultimo tick comun mide lo primero como
+// si fuera lo segundo — y es exactamente lo que hacia fallar este test en CI,
+// donde el timing es distinto.
+const SETTLED = 24
+
+// Primer tick, dentro del rango ya asentado, en el que las dos simulaciones no
+// coinciden. null si coinciden en todos.
+// `margin` es cuantos ticks del final se ignoran. El default cubre inputs en
+// vuelo; si en la fase que se mide no se manda ningun input, no hay nada en vuelo
+// y el margen puede ser minimo.
+function firstDivergence(a, b, margin = SETTLED) {
+  const top = Math.min(a.state.net.tick, b.state.net.tick) - margin
+  for (let tick = 0; tick <= top; tick++) {
+    const ha = a.state.net.hashAt(tick)
+    const hb = b.state.net.hashAt(tick)
+    if (ha === null || hb === null) continue
+    if (ha !== hb) return tick
   }
   return null
 }
 
-async function pair(t, game, room, bootstrap) {
-  const a = new Player('a', game, room, bootstrap)
-  const b = new Player('b', game, room, bootstrap)
+// Cuantos ticks se pudieron comparar de verdad, para que el test no pase por no
+// haber comparado nada.
+function comparable(a, b, margin = SETTLED) {
+  const top = Math.min(a.state.net.tick, b.state.net.tick) - margin
+  let n = 0
+  for (let tick = 0; tick <= top; tick++) {
+    if (a.state.net.hashAt(tick) !== null && b.state.net.hashAt(tick) !== null) n += 1
+  }
+  return n
+}
+
+async function pair(t, game, room, bootstrap, opts = {}) {
+  const a = new Player('a', game, room, bootstrap, opts)
+  const b = new Player('b', game, room, bootstrap, opts)
   t.teardown(async () => {
     await a.close()
     await b.close()
@@ -282,9 +325,10 @@ test('snake: dos peers simulan lo mismo con inputs cruzados por la red', async (
   t.is(a.state.me === 0 ? 1 : 0, b.state.me, 'cada uno es una serpiente distinta')
   t.not(a.state.authority, b.state.authority, 'una sola autoridad')
 
-  // relojes alineados: el anfitrion arranco antes, asi que el otro lo sigue
+  // Corre lo suficiente para que quede un rango asentado que valga la pena
+  // comparar, y para que el chequeo de hash alcance a correr.
   const turns = ['up', 'right', 'down', 'left']
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 140; i++) {
     a.tick()
     b.tick()
     if (i % 7 === 3) a.key(turns[i % 4])
@@ -292,26 +336,27 @@ test('snake: dos peers simulan lo mismo con inputs cruzados por la red', async (
     await sleep(25)
   }
 
-  // dejar que lleguen los ultimos inputs y que los ticks se igualen
-  await sleep(600)
-  for (let i = 0; i < 30; i++) {
+  // que lleguen los ultimos inputs y que los dos relojes avancen
+  await sleep(800)
+  for (let i = 0; i < 40; i++) {
     a.tick()
     b.tick()
     await sleep(25)
   }
-  await sleep(400)
+  await sleep(500)
 
-  // Buscar un tick que las DOS puntas tengan en su historial, en vez de asumir
-  // uno: los relojes no arrancaron juntos y en un runner lento el desfase es
-  // mayor.
-  const common = commonTick(a, b)
-  t.ok(common !== null, 'hay un tick con historia en las dos puntas')
-  t.is(a.state.net.hashAt(common), b.state.net.hashAt(common), `coinciden en el tick ${common}`)
+  const n = comparable(a, b)
+  t.ok(n > 20, `hay rango asentado para comparar (${n} ticks)`)
+  t.is(firstDivergence(a, b), null, 'ninguna divergencia en el rango asentado')
 
-  // Esta es la propiedad que importa y la que el arreglo de SYNC_CONFIRM
-  // garantiza: un input en vuelo no dispara una resincronizacion.
+  // Esto es lo que garantiza el arreglo de SYNC_CONFIRM: un input en vuelo no
+  // dispara una resincronizacion completa.
   t.is(a.state.net.desyncs, 0, 'a no necesito resincronizar')
   t.is(b.state.net.desyncs, 0, 'b no necesito resincronizar')
+
+  // Nota de cobertura: sobre loopback los inputs llegan antes de que el receptor
+  // alcance ese tick, asi que aca no se ejercita el rollback (rollbacks = 0
+  // medido). El rollback se prueba en test/snake.js, inyectando latencia.
 })
 
 test('snake: una desincronizacion forzada se recupera por la red', async (t) => {
@@ -355,20 +400,25 @@ test('snake: una desincronizacion forzada se recupera por la red', async (t) => 
   t.ok(follower.state.net.desyncs > before, 'detecto y adopto el snapshot')
   t.is(leader.state.net.desyncs, 0, 'la autoridad no adopta nada')
 
-  // y despues de adoptar, vuelven a coincidir
-  for (let i = 0; i < 30; i++) {
+  // Y despues de adoptar, vuelven a coincidir. Corre lo suficiente para que
+  // quede rango asentado: adopt() limpia los snapshots, asi que si se compara
+  // enseguida no hay con que comparar y el test pasaria sin probar nada — que es
+  // exactamente lo que hacia antes.
+  for (let i = 0; i < 90; i++) {
     a.tick()
     b.tick()
     await sleep(25)
   }
-  await sleep(300)
+  await sleep(600)
 
-  const common = commonTick(a, b)
-  if (common !== null) {
-    t.is(a.state.net.hashAt(common), b.state.net.hashAt(common), 'recuperaron la sincronia')
-  } else {
-    t.pass('sin historia comun para comparar, pero la adopcion ocurrio')
-  }
+  // Margen chico a proposito: en esta fase no se manda ningun input, solo se
+  // tickea, asi que no hay nada en vuelo que justifique ignorar 24 ticks. Y
+  // adopt() limpia los snapshots, con lo cual el rango arranca recien en el tick
+  // adoptado — con el margen grande no quedaba nada que comparar y el test
+  // pasaba sin probar nada.
+  const n = comparable(a, b, 2)
+  t.ok(n > 10, `hay rango comparable despues de adoptar (${n} ticks)`)
+  t.is(firstDivergence(a, b, 2), null, 'recuperaron la sincronia y la mantienen')
 })
 
 test('3 en raya: la revancha invierte los roles y el chat acepta acentos', async (t) => {
@@ -416,4 +466,43 @@ test('3 en raya: la revancha invierte los roles y el chat acepta acentos', async
   await sleep(200)
   t.is(a.state.board[4], 'X', 'a ve la jugada')
   t.is(b.state.board[4], 'X', 'b ve la jugada')
+})
+
+test('snake: con un enlace lento hay rollbacks de verdad y siguen convergiendo', async (t) => {
+  // El test anterior corre sobre loopback, donde los inputs llegan antes de que
+  // el receptor alcance ese tick: cero rollbacks, o sea que no prueba el camino
+  // que mas importa. Aca se demora la entrega de los inputs 250ms (~3 ticks a
+  // 12Hz) para forzar que las dos puntas tengan que rebobinar y re-simular.
+  const bootstrap = await testnet(t)
+  const [a, b] = await pair(t, snake, 'snake-lento', bootstrap, { latency: 250 })
+
+  const turns = ['up', 'right', 'down', 'left']
+  for (let i = 0; i < 140; i++) {
+    a.tick()
+    b.tick()
+    if (i % 5 === 2) a.key(turns[i % 4])
+    if (i % 6 === 3) b.key(turns[(i + 1) % 4])
+    await sleep(25)
+  }
+
+  // margen holgado: mas que la latencia inyectada
+  await sleep(1200)
+  for (let i = 0; i < 40; i++) {
+    a.tick()
+    b.tick()
+    await sleep(25)
+  }
+  await sleep(600)
+
+  const rollbacks = a.state.net.rollbacks + b.state.net.rollbacks
+  t.ok(rollbacks > 0, `hubo rollbacks de verdad (${rollbacks})`)
+
+  const n = comparable(a, b)
+  t.ok(n > 20, `hay rango asentado para comparar (${n} ticks)`)
+  t.is(firstDivergence(a, b), null, 'convergen igual, con rollbacks en el medio')
+
+  // Y esto valida que SYNC_LAG alcanza: 250ms de retraso no tiene que disparar
+  // una resincronizacion, porque el hash se compara 24 ticks (~2s) atras.
+  t.is(a.state.net.desyncs, 0, 'a no resincronizo por un enlace lento')
+  t.is(b.state.net.desyncs, 0, 'b no resincronizo por un enlace lento')
 })
