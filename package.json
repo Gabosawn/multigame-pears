@@ -8,7 +8,7 @@
   "upgrade": "pear://h1h8okbqt6r3hdgpfrta9mkw69ty1ukiu7brin1juydwgakn9efy",
   "scripts": {
     "format": "prettier . --write",
-    "test": "brittle-bare test/index.js test/snake.js test/lobby.js",
+    "test": "brittle-bare test/index.js test/snake.js test/lobby.js test/games-e2e.js",
     "lint": "prettier . --check && lunte",
     "start": "bare bin.mjs --no-updates",
     "make": "node scripts/make.js",

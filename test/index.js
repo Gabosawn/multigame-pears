@@ -87,3 +87,23 @@ test('teclas: printable distingue texto de comandos', (t) => {
   t.absent(keys.printable('up'))
   t.absent(keys.printable('enter'))
 })
+
+test('teclas: se puede escribir en español', (t) => {
+  // el filtro era ASCII imprimible, asi que no se podia tipear "ñ" ni un acento
+  // ni en el chat ni en el nombre de una sala
+  for (const c of ['ñ', 'Ñ', 'á', 'é', 'í', 'ó', 'ú', 'ü', '¿', '¡']) {
+    t.ok(keys.printable(c), `se puede escribir ${c}`)
+  }
+})
+
+test('teclas: los caracteres de control siguen afuera', (t) => {
+  t.absent(keys.printable('\x00'))
+  t.absent(keys.printable('\x07'), 'bell')
+  t.absent(keys.printable('\x1b'), 'escape crudo')
+  t.absent(keys.printable('\x7f'), 'delete')
+})
+
+test('teclas: un chunk con acentos se decodifica entero', (t) => {
+  t.alike(keys.decode('año'), ['a', 'ñ', 'o'])
+  t.alike(keys.decode('¿jugamos?\r'), ['¿', 'j', 'u', 'g', 'a', 'm', 'o', 's', '?', 'enter'])
+})
