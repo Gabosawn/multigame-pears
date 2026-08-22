@@ -4,3 +4,5 @@ out/
 .DS_Store
 deployment/
 by-arch.tar.gz
+
+.content-key.json

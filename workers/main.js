@@ -49,6 +49,19 @@ if (config.updates !== false) {
 pear.updater.on('updating', () => pipe.write('updating'))
 pear.updater.on('updated', () => pipe.write('updated'))
 
+// El updater emite un evento por entrada que va mirroreando. bin.mjs ya
+// enganchaba 'updating-delta' pero nadie lo emitia, asi que el OTA se veia como
+// un salto de "descargando" a "listo" sin nada en el medio — y son 98 MB.
+pear.updater.on('updating-delta', (delta) => {
+  let text = ''
+  try {
+    text = typeof delta === 'string' ? delta : JSON.stringify(delta)
+  } catch {
+    return
+  }
+  pipe.write('updating-delta:' + text)
+})
+
 pipe.on('data', async (data) => {
   if (data.toString() !== 'pear:applyUpdate') return
   await pear.ready()

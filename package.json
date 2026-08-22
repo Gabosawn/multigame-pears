@@ -12,6 +12,7 @@
     "lint": "prettier . --check && lunte",
     "start": "bare bin.mjs --no-updates",
     "make": "node scripts/make.js",
+    "content": "node scripts/content.js",
     "seed": "./scripts/seed-guard.sh pear://h1h8okbqt6r3hdgpfrta9mkw69ty1ukiu7brin1juydwgakn9efy mcnxjei8cwjh3cas3q6cjumwhq6q3djosr3uketzujyrphnespgy 30",
     "seed:check": "node scripts/check-seed.js mcnxjei8cwjh3cas3q6cjumwhq6q3djosr3uketzujyrphnespgy",
     "make:darwin-arm64": "bare-build --name multigame-pears --standalone --host darwin-arm64 --out ./out/darwin-arm64 bin.mjs",
