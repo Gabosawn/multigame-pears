@@ -71,14 +71,33 @@ npm run make                 # binario standalone en out/<platform>-<arch>
 ## Despliegue
 
 ```sh
+npm version patch            # el updater compara este campo: sin bump no hay update
 npm run make
 pear build --package package.json --linux-x64-app out/linux-x64/multigame-pears --target deployment
+pear stage --dry-run pear://<key> ./deployment    # siempre mirar el delta primero
 pear stage pear://<key> ./deployment
-pear seed pear://<key>
 ```
 
 Para las seis arquitecturas, el workflow `.github/workflows/build.yaml` compila la matriz completa
 y publica un `by-arch.tar.gz` ya empaquetado, listo para `pear stage`.
+
+## Seeding
+
+Un link publicado no sirve de nada si su anuncio en la DHT caduca: `pear seed` sigue corriendo e
+imprimiendo `announced` mientras nadie puede instalar, y del otro lado el `pear install` falla con
+`ERR_NETWORK_TIMEOUT`. Por eso el seeding tiene guardian propio:
+
+```sh
+npm run seed                 # pear seed + verificacion real cada 30s, con recuperacion
+npm run seed:check           # ¿esta anunciado ahora mismo? exit 0 si / 1 no / 2 no se pudo saber
+```
+
+El guardian consulta la DHT igual que lo haria un usuario, confirma cada caida con un segundo
+chequeo antes de reiniciar nada, adopta un seed sano que ya este corriendo (relevo sin downtime) y
+escala a reiniciar el sidecar si reiniciar el seed no alcanza.
+
+Y como cada copia instalada anuncia el drive (`server: true` en `workers/main.js`), los jugadores
+tambien son seeders: la sala se re-siembra a si misma.
 
 ## Licencia
 
