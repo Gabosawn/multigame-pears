@@ -39,6 +39,18 @@ const deadline = (ms, what) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref?.())
 
+// Esperar a que algo PASE, en lugar de dormir un rato y cruzar los dedos. El
+// fallo de CI que motivo esto era justamente eso: un runner mas lento que los
+// sleeps fijos del test.
+async function until(fn, ms, what) {
+  const end = Date.now() + ms
+  while (Date.now() < end) {
+    if (fn()) return true
+    await sleep(20)
+  }
+  throw new Error(`timeout esperando: ${what}`)
+}
+
 // Un jugador: lobby + estado de juego, cableado igual que lib/ui.js. Si esto se
 // desvia de la UI el test deja de valer, asi que se mantiene deliberadamente
 // parecido.
@@ -128,6 +140,16 @@ class Player {
   }
 }
 
+// El tick mas reciente que las dos simulaciones tengan en su historial. Los
+// relojes no arrancan juntos, asi que el rango comun se busca en vez de asumirse.
+function commonTick(a, b) {
+  const top = Math.min(a.state.net.tick, b.state.net.tick)
+  for (let tick = top; tick > top - 60 && tick >= 0; tick--) {
+    if (a.state.net.hashAt(tick) !== null && b.state.net.hashAt(tick) !== null) return tick
+  }
+  return null
+}
+
 async function pair(t, game, room, bootstrap) {
   const a = new Player('a', game, room, bootstrap)
   const b = new Player('b', game, room, bootstrap)
@@ -176,8 +198,17 @@ test('3 en raya: partida completa sobre la red, los dos coinciden en el resultad
   ]
 
   for (const [who, k] of plays) {
+    const cell = Number(k) - 1
+    const before = a.state.board[cell]
     who.key(k)
-    await sleep(150) // que el movimiento llegue al otro lado
+    if (before === null) {
+      // esperar a que la jugada este en LAS DOS puntas antes de la siguiente
+      await until(
+        () => a.state.board[cell] !== null && b.state.board[cell] !== null,
+        8000,
+        `la jugada ${k} llegue a las dos puntas`
+      )
+    }
   }
 
   // X tiene 1,5,3 — no es linea todavia. Cerramos por la diagonal 1-5-9.
@@ -192,14 +223,17 @@ test('3 en raya: partida completa sobre la red, los dos coinciden en el resultad
 
   // y jugar hasta que termine, alternando en las casillas libres
   for (let guard = 0; guard < 12; guard++) {
-    const done = tresEnRaya.isOver(a.state)
-    if (done) break
+    if (tresEnRaya.isOver(a.state)) break
     const turn = a.state.turn
     const who = a.state.me === turn ? a : b
     const free = a.state.board.findIndex((c) => c === null)
     if (free === -1) break
     who.key(String(free + 1))
-    await sleep(150)
+    await until(
+      () => a.state.board[free] !== null && b.state.board[free] !== null,
+      8000,
+      `la jugada en ${free + 1} llegue a las dos puntas`
+    )
   }
 
   const da = tresEnRaya.isOver(a.state)
@@ -267,13 +301,15 @@ test('snake: dos peers simulan lo mismo con inputs cruzados por la red', async (
   }
   await sleep(400)
 
-  // alinear al mismo tick antes de comparar: los relojes no arrancaron juntos
-  const target = Math.max(a.state.net.tick, b.state.net.tick)
-  const ha = a.state.net.hashAt(target - 12)
-  const hb = b.state.net.hashAt(target - 12)
+  // Buscar un tick que las DOS puntas tengan en su historial, en vez de asumir
+  // uno: los relojes no arrancaron juntos y en un runner lento el desfase es
+  // mayor.
+  const common = commonTick(a, b)
+  t.ok(common !== null, 'hay un tick con historia en las dos puntas')
+  t.is(a.state.net.hashAt(common), b.state.net.hashAt(common), `coinciden en el tick ${common}`)
 
-  t.ok(ha !== null && hb !== null, `hay historia en el tick ${target - 12}`)
-  t.is(ha, hb, 'las dos simulaciones coinciden en el mismo tick')
+  // Esta es la propiedad que importa y la que el arreglo de SYNC_CONFIRM
+  // garantiza: un input en vuelo no dispara una resincronizacion.
   t.is(a.state.net.desyncs, 0, 'a no necesito resincronizar')
   t.is(b.state.net.desyncs, 0, 'b no necesito resincronizar')
 })
@@ -327,11 +363,9 @@ test('snake: una desincronizacion forzada se recupera por la red', async (t) => 
   }
   await sleep(300)
 
-  const target = Math.min(a.state.net.tick, b.state.net.tick) - 10
-  const ha = a.state.net.hashAt(target)
-  const hb = b.state.net.hashAt(target)
-  if (ha !== null && hb !== null) {
-    t.is(ha, hb, 'recuperaron la sincronia')
+  const common = commonTick(a, b)
+  if (common !== null) {
+    t.is(a.state.net.hashAt(common), b.state.net.hashAt(common), 'recuperaron la sincronia')
   } else {
     t.pass('sin historia comun para comparar, pero la adopcion ocurrio')
   }
