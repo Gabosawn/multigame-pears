@@ -35,15 +35,50 @@ const pear = new PearRuntime({ ...config, swarm, store })
 
 pear.updater.on('error', (err) => pipe.write('error:' + err.message))
 
+// Cada cuanto se vuelve a buscar a alguien que tenga el drive, mientras no haya
+// nadie. Hyperswarm por su cuenta repite la busqueda cada varios minutos, y si
+// el seeder anuncio DESPUES de nuestro primer lookup, esperar esos minutos es
+// exactamente lo que se siente como "la actualizacion necesito varios intentos".
+const FIND_MIN = 4000
+const FIND_MAX = 60000
+const FIND_GROWTH = 1.6
+
 if (config.updates !== false) {
-  swarm.on('connection', (connection) => store.replicate(connection))
+  swarm.on('connection', (connection) => {
+    // Sin este listener, un peer que se corta a mitad de la replicacion emite
+    // 'error' sin nadie escuchando y TUMBA el worker thread. El updater queda
+    // muerto por el resto de la sesion y la actualizacion "anda al segundo
+    // intento". lib/lobby.js:168 ya tenia esta guarda; aca faltaba.
+    connection.on('error', () => {})
+    try {
+      store.replicate(connection)
+    } catch (err) {
+      pipe.write('error:' + err.message)
+    }
+  })
+
+  swarm.on('error', (err) => pipe.write('error:' + err.message))
+
   // server:true — el boilerplate solo descarga (client). Anunciando tambien,
   // cada copia instalada sirve el drive a las demas: la sala se re-siembra a si
   // misma y la actualizacion llega literalmente de otros jugadores.
-  swarm.join(pear.updater.drive.core.discoveryKey, {
+  const discovery = swarm.join(pear.updater.drive.core.discoveryKey, {
     client: true,
     server: true
   })
+
+  // Insistir con backoff mientras no haya con quien replicar. Se corta sola en
+  // cuanto aparece un peer, asi que no agrega ruido a la DHT sin motivo.
+  let findDelay = FIND_MIN
+  const find = () => {
+    if (swarm.connections.size > 0) return
+    discovery.refresh().catch(() => {})
+    findDelay = Math.min(Math.round(findDelay * FIND_GROWTH), FIND_MAX)
+    const timer = setTimeout(find, findDelay)
+    if (timer.unref) timer.unref()
+  }
+  const first = setTimeout(find, FIND_MIN)
+  if (first.unref) first.unref()
 }
 
 pear.updater.on('updating', () => pipe.write('updating'))

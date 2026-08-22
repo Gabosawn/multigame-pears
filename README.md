@@ -56,6 +56,26 @@ que baja el archivo entero. Por internet eso son unos cuatro segundos. Por Bluet
 Además, cada copia instalada **anuncia** el drive, no solo lo consume (`server: true` en
 [`workers/main.js`](workers/main.js)): los jugadores son seeders y la sala se re-siembra a sí misma.
 
+> **Si publicás una versión, mantené `pear seed pear://<key>` corriendo.** Pear no tiene CDN: los
+> bytes de la actualización salen de peers. Si el único que los tiene apaga la máquina, las copias
+> instaladas se quedan esperando y el OTA parece roto. Usá `npm run seed`, que además verifica el
+> anuncio de verdad cada 30s. Lo ideal es una máquina siempre encendida — y para eso el ecosistema
+> tiene [blind peering](https://docs.pears.com/how-to/blind-peering/), que es lo que hay que usar
+> si conseguís un servidor.
+
+### Por qué el OTA fallaba al primer intento
+
+Dos causas concretas, las dos arregladas:
+
+**El worker se caía.** `swarm.on('connection', ...)` no ponía un listener de `'error'` en la
+conexión de replicación. Un peer que se corta a mitad de la transferencia emite `'error'` sin nadie
+escuchando, y eso **tumba el worker thread**: el updater queda muerto por el resto de la sesión y la
+actualización "anda al segundo intento". `lib/lobby.js` ya tenía esa guarda; el worker no.
+
+**El seeder aparecía tarde.** Si el seeder anuncia _después_ de nuestro primer lookup, Hyperswarm
+por su cuenta no vuelve a buscar hasta varios minutos más tarde. Ahora el worker insiste con backoff
+(4s → 60s) mientras no tenga con quién replicar, y para en cuanto aparece alguien.
+
 ### 2. El contenido viaja por gossip, y ese sí pasa por Bluetooth
 
 Para lo que el brief llama _"patch balance or add levels while people are still playing"_ hay un
