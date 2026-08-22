@@ -155,14 +155,30 @@ la clase de bug que arruina una partida en silencio, y se atrapa sin sockets.
 
 ```sh
 npm version patch            # el updater compara este campo: sin bump no hay update
-npm run make
-pear build --package package.json --linux-x64-app out/linux-x64/multigame-pears --target deployment
-pear stage --dry-run pear://<key> ./deployment    # siempre mirar el delta primero
-pear stage pear://<key> ./deployment
+npm run make                 # o los seis: npm run make:<host>
+./scripts/release.sh         # arma el deployment y muestra el delta, sin publicar
+./scripts/release.sh --publish
+```
+
+El script existe para que no se olviden tres cosas: el bump de versión (sin él la copia instalada
+no se actualiza nunca y parece que el OTA está roto), el `--dry-run` antes de subir ~473 MB que no
+se deshacen, y **copiar el `CHANGELOG.md` al deployment** — `pear build` no lo hace, y sin eso
+`pear changelog pear://<key>` devuelve `No Changelog`. Ese es el mecanismo nativo de Pear para
+distribuir release notes peer-to-peer, así que vale la pena que funcione:
+
+```sh
+pear changelog pear://h1h8okbqt6r3hdgpfrta9mkw69ty1ukiu7brin1juydwgakn9efy --full
 ```
 
 Para las seis arquitecturas, el workflow `.github/workflows/build.yaml` compila la matriz completa
 y publica un `by-arch.tar.gz` ya empaquetado, listo para `pear stage`.
+
+### Probar el OTA sin arriesgar el link publicado
+
+`pear touch` da un link desechable. Se fija con `npm pkg set upgrade=<link>` en una copia del
+árbol, se publica ahí y se prueba el ciclo completo contra esa copia. Es como se verificó este
+release: v0.4.0 instalada detectó v0.4.1 en 4 segundos, bajó los 98.9 MB, aplicó, y al reiniciar
+corría el código nuevo.
 
 ## Seeding
 
