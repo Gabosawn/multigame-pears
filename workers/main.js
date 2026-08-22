@@ -37,9 +37,12 @@ pear.updater.on('error', (err) => pipe.write('error:' + err.message))
 
 if (config.updates !== false) {
   swarm.on('connection', (connection) => store.replicate(connection))
+  // server:true — el boilerplate solo descarga (client). Anunciando tambien,
+  // cada copia instalada sirve el drive a las demas: la sala se re-siembra a si
+  // misma y la actualizacion llega literalmente de otros jugadores.
   swarm.join(pear.updater.drive.core.discoveryKey, {
     client: true,
-    server: false
+    server: true
   })
 }
 
