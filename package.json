@@ -18,8 +18,16 @@
     "make:win32-arm64": "bare-build --name multigame-pears --standalone --host win32-arm64 --out ./out/win32-arm64 bin.mjs",
     "make:win32-x64": "bare-build --name multigame-pears --standalone --host win32-x64 --out ./out/win32-x64 bin.mjs"
   },
+  "imports": {
+    "#ble-backend": {
+      "linux": "./lib/ble-backend-linux.js",
+      "default": "./lib/ble-backend-none.js"
+    }
+  },
   "dependencies": {
     "b4a": "^1.8.1",
+    "bare-bluetooth-linux": "^0.2.0",
+    "ble-swarm": "^2.1.0",
     "bare-os": "^3.9.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.5.0",
