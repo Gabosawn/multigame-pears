@@ -31,10 +31,10 @@ multigame-pears
 
 ## Juegos
 
-| Juego | Modo | Transporte |
-| --- | --- | --- |
-| **3 en raya** | por turnos | Hyperswarm · y BLE con el wifi apagado |
-| **Tron** (motos de luz) | tiempo real | Hyperswarm (UDP directo) |
+| Juego                   | Modo        | Transporte                             |
+| ----------------------- | ----------- | -------------------------------------- |
+| **3 en raya**           | por turnos  | Hyperswarm · y BLE con el wifi apagado |
+| **Tron** (motos de luz) | tiempo real | Hyperswarm (UDP directo)               |
 
 El 3 en raya es por turnos, así que sobrevive perfectamente al ancho de banda de Bluetooth LE
 (~5–20 KB/s). Tron necesita la conexión UDX directa, donde la latencia es prácticamente el RTT de

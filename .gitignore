@@ -3,3 +3,4 @@ dist/
 out/
 .DS_Store
 deployment/
+by-arch.tar.gz
