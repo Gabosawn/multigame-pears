@@ -35,6 +35,22 @@
 
 ---
 
+## v0.4.1
+
+### Fixes
+
+- Un check fallido de libdbus abortaba el juego entero en plena búsqueda de
+  rival (SIGABRT); ahora el BLE de esa sesión se degrada y la partida por
+  internet sigue viva
+- El backend BLE registraba y desregistraba la app GATT dos veces por arranque;
+  esa ventana de mutación producía el path inválido del abort y llegó a tumbar
+  a bluetoothd entero. El registro ahora es idempotente
+- BlueZ puede soltar un anuncio ya aceptado (Release) y nadie lo escuchaba: el
+  lobby quedaba invisible para siempre creyendo que anunciaba. Ahora se
+  re-anuncia con backoff
+
+---
+
 ## v0.4.0
 
 ### Features
