@@ -21,6 +21,11 @@ const cmd = command(
   flag('--version|-v', 'Print the current version'),
   flag('--storage <dir>', 'custom storage directory'),
   flag('--no-updates', 'disable OTA updates for this run'),
+  // El puente BLE de Linux (bare-bluetooth-linux 0.2.0) hace llamadas D-Bus
+  // sincronas de hasta 2s en el loop principal: cuando una conexion GATT
+  // engancha de verdad, la interfaz entera se congela. Hasta que upstream sea
+  // asincrono, este flag permite jugar por internet sin que el radio moleste.
+  flag('--no-bluetooth', 'buscar rival solo por internet (el BLE de Linux es experimental)'),
   flag('--content <file>', 'publicar registros de contenido firmados desde un archivo')
 )
 
@@ -91,7 +96,7 @@ if (!tty.isTTY(0) || !tty.isTTY(1)) {
 try {
   await app.ready()
 
-  ui = new UI({ version: pkg.version, content, prefs })
+  ui = new UI({ version: pkg.version, content, prefs, bluetooth: cmd.flags.bluetooth })
   ui.onclose = () => shutdown(0)
   ui.render()
 } catch (err) {
