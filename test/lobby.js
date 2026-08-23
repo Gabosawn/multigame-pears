@@ -178,3 +178,61 @@ test('lobby: el handshake no se pierde cuando los dos se marcan a la vez', async
     await b.close()
   }
 })
+
+test('lobby: los inputs sobreviven el swap de sockets a mitad de partida', async (t) => {
+  // El dedup de hyperswarm puede matar el socket perdedor SEGUNDOS despues de
+  // emparejar (medido: ~6s sobre loopback), o sea en plena partida. Un INPUT
+  // que viajaba en ese socket se iba con el destroy() — es efimero, no se
+  // reenviaba — y las dos simulaciones de snake quedaban separadas hasta que
+  // el chequeo de hash pedia un snapshot completo. El fallo de CI en macOS y
+  // Windows era exactamente esto: alli el test es mas lento y el swap caia
+  // dentro de la ventana de inputs. Aca se manda trafico continuo a traves de
+  // esa ventana y no se puede perder ni uno.
+  const bootstrap = await testnet(t)
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref?.())
+
+  const a = lobby(t, 'swap-inputs', bootstrap)
+  const b = lobby(t, 'swap-inputs', bootstrap)
+
+  const gotA = new Map()
+  const gotB = new Map()
+  let chatsB = 0
+  a.on('message', (m) => {
+    if (m.t === protocol.T.INPUT) gotA.set(m.tick, m.dir)
+  })
+  b.on('message', (m) => {
+    if (m.t === protocol.T.INPUT) gotB.set(m.tick, m.dir)
+    if (m.t === protocol.T.CHAT) chatsB += 1
+  })
+
+  const both = Promise.all([paired(a), paired(b)])
+  await a.ready()
+  await b.ready()
+  await Promise.race([both, deadline(5000, 'emparejamiento')])
+
+  // un swap del mismo rival NO es un emparejamiento nuevo
+  let repaired = false
+  a.on('paired', () => (repaired = true))
+  b.on('paired', () => (repaired = true))
+
+  // ~8s de trafico: cubre de sobra la ventana tipica del dedup
+  for (let tick = 1; tick <= 80; tick++) {
+    a.send({ t: protocol.T.INPUT, tick, dir: tick % 4 })
+    b.send({ t: protocol.T.INPUT, tick, dir: (tick + 1) % 4 })
+    if (tick % 20 === 0) a.send({ t: protocol.T.CHAT, text: `hito ${tick}` })
+    await sleep(100)
+  }
+  await sleep(1000) // que aterrice lo que el ultimo swap haya reenviado
+
+  // repetido vale (el netcode ignora duplicados); perdido no
+  let missingA = 0
+  let missingB = 0
+  for (let tick = 1; tick <= 80; tick++) {
+    if (gotB.get(tick) !== tick % 4) missingB += 1
+    if (gotA.get(tick) !== (tick + 1) % 4) missingA += 1
+  }
+  t.is(missingB, 0, 'b recibio los 80 inputs de a')
+  t.is(missingA, 0, 'a recibio los 80 inputs de b')
+  t.is(chatsB, 4, 'los numerados llegaron exactamente una vez cada uno')
+  t.absent(repaired, 'el swap no reinicio la partida')
+})

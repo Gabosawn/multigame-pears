@@ -194,3 +194,35 @@ test('snake: adoptar un snapshot resincroniza', (t) => {
   p1.advanceTo(80)
   t.is(p0.hash(), p1.hash(), 'y siguen iguales al avanzar')
 })
+
+test('snake: la arena que viaja en MATCH conserva las paredes', (t) => {
+  // La regresion que cubre esto: build() regeneraba las paredes desde el
+  // preset, pero una arena YA CONSTRUIDA (lo que manda MATCH) no lleva preset,
+  // asi que el invitado caia al default y jugaba SIN paredes. Mismo id en las
+  // dos puntas, otra simulacion: el anfitrion veia morir su serpiente contra
+  // un muro que para el rival no existia, y de ahi en adelante todo era
+  // resincronizar. Era el fallo de CI en macOS y Windows.
+  const host = arenas.pick(0) // 'muro': la de fabrica con paredes
+  t.ok(host.walls.length > 0, 'la arena de la rotacion tiene paredes')
+
+  // el viaje real: JSON por el stream, igual que protocol.encode
+  const guest = arenas.build(JSON.parse(JSON.stringify(host)))
+  t.alike(guest.walls, host.walls, 'las paredes sobreviven el viaje')
+
+  const a = new Sim(host, 99)
+  const b = new Sim(guest, 99)
+  for (let i = 0; i < 120; i++) {
+    a.step(a.state)
+    b.step(b.state)
+  }
+  t.is(a.hash(a.state), b.hash(b.state), 'anfitrion e invitado simulan lo mismo')
+
+  // y una definicion de registro (preset, sin walls) sigue generando igual
+  const def = arenas.build({ id: 'x', name: 'x', w: 40, h: 15, preset: 'muro', tickRate: 12 })
+  t.alike(def.walls, host.walls, 'la definicion con preset genera las mismas paredes')
+
+  // paredes fuera del tablero (llegan de la red) se filtran en vez de romper
+  const viajada = JSON.parse(JSON.stringify(host))
+  viajada.walls = [0, -1, 599, 600, 3.5]
+  t.alike(arenas.build(viajada).walls, [0, 599], 'las celdas absurdas no entran')
+})

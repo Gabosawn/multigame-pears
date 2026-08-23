@@ -62,6 +62,11 @@
 
 ### Fixes
 
+- La arena que viaja en MATCH perdía las paredes al reconstruirse: el invitado
+  jugaba "El muro" sin muro y la partida se separaba sola
+- Los inputs de snake en vuelo se perdían cuando hyperswarm deduplicaba los
+  sockets cruzados a mitad de partida (~6s después de emparejar): ahora se
+  reenvían tras el swap y el netcode ignora los repetidos
 - Dos teclas en el mismo tick desincronizaban la partida en silencio
 - El evento updating-delta se enganchaba pero nadie lo emitia: el OTA no
   mostraba progreso
