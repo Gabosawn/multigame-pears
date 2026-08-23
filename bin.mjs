@@ -73,7 +73,24 @@ let ui = null
 const update = (text) => ui?.setUpdateState(text)
 
 app.on('updating', () => update('actualización encontrada, descargando…'))
-app.on('updating-delta', (delta) => update(`descargando la actualización: ${delta}`))
+// el worker manda el evento crudo del mirror (un JSON por entrada): mostrarlo
+// tal cual era ver {"op":"add",...,"bytesAdded":98926256} congelado en la barra
+// y jurar que se colgó — cuando en realidad los 98MB bajaban en silencio.
+const prettyDelta = (raw) => {
+  try {
+    const d = JSON.parse(raw)
+    const name =
+      String(d.key || '')
+        .split('/')
+        .pop() || 'archivo'
+    const mb = d.bytesAdded > 0 ? ` (${(d.bytesAdded / 1e6).toFixed(1)}MB)` : ''
+    return `${name}${mb}…`
+  } catch {
+    return raw
+  }
+}
+
+app.on('updating-delta', (delta) => update(`descargando la actualización: ${prettyDelta(delta)}`))
 app.on('updated', () => update('actualización descargada, aplicando…'))
 app.on('update-applied', () => update('nueva versión lista — reiniciá para jugarla'))
 app.on('error', (err) => update(`error: ${err.message}`))
