@@ -2,3 +2,4 @@ content-published.json
 out/
 deployment/
 by-arch.tar.gz
+vendor/bare-bluetooth-linux

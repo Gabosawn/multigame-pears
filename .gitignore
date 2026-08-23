@@ -7,3 +7,7 @@ deployment/
 by-arch.tar.gz
 
 .content-key.json
+vendor/bare-bluetooth-linux/build/
+vendor/bare-bluetooth-linux/node_modules/
+seed.log
+seed-guard.log

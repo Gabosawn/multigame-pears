@@ -1,0 +1,50 @@
+{
+  "name": "bare-bluetooth-linux",
+  "version": "0.2.0",
+  "description": "BlueZ D-Bus bindings for Bare",
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "binding.cc",
+    "binding.js",
+    "CMakeLists.txt",
+    "lib",
+    "prebuilds"
+  ],
+  "addon": true,
+  "scripts": {
+    "format": "prettier --write . && lunte --fix",
+    "lint": "prettier --check . && lunte",
+    "test": "brittle-bare --coverage test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holepunchto/bare-bluetooth-linux.git"
+  },
+  "author": "Holepunch",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/holepunchto/bare-bluetooth-linux/issues"
+  },
+  "homepage": "https://github.com/holepunchto/bare-bluetooth-linux#readme",
+  "dependencies": {
+    "bare-events": "^2.5.4"
+  },
+  "devDependencies": {
+    "bare-os": "^3.9.1",
+    "brittle": "^3.18.0",
+    "cmake-bare": "^1.6.5",
+    "cmake-fetch": "^1.4.9",
+    "cmake-harden": "^1.1.2",
+    "lunte": "^1.6.0",
+    "prettier": "^3.8.1",
+    "prettier-config-holepunch": "^2.0.0"
+  }
+}
