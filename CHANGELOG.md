@@ -87,3 +87,23 @@
 - BlueZ puede soltar un anuncio ya aceptado (Release) y nadie lo escuchaba: el
   lobby quedaba invisible para siempre creyendo que anunciaba. Ahora se
   re-anuncia con backoff
+
+---
+
+## v0.4.2
+
+### Fixes
+
+- Cualquier dispositivo Bluetooth del vecindario que cambiara su estado de
+  conexión podía matar el juego entero: el puente emitía un error que nadie
+  escuchaba y la excepción tumbaba el proceso. El duelo por BT "se conectaba y
+  desconectaba" porque una de las puntas literalmente se moría
+- La interfaz se congelaba a saltos de 2 segundos mientras una conexión BT
+  enganchaba: el binding de Linux hace llamadas D-Bus síncronas en el loop
+  principal. Va vendorizado con el timeout bajado a 300ms (hipos en vez de
+  freezes) hasta que upstream sea asíncrono
+
+### Improvements
+
+- Flag --no-bluetooth: buscar rival solo por internet, para jugar estable
+  mientras el BLE de Linux madura
