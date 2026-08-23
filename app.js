@@ -56,6 +56,11 @@ module.exports = class App extends ReadyResource {
       return
     }
 
+    if (message.startsWith('updating-delta:')) {
+      this.emit('updating-delta', message.slice('updating-delta:'.length))
+      return
+    }
+
     if (message === 'updated') {
       this.emit('updated')
       this._send('pear:applyUpdate')

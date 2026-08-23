@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "arena",
+    "id": "3f257fd6d7d3c3856bf2adb5e54e1297",
+    "data": {
+      "id": "laberinto",
+      "name": "El laberinto",
+      "w": 40,
+      "h": 15,
+      "preset": "cuadros",
+      "tickRate": 12
+    },
+    "sig": "9338214d7321f53f06afe94a3244c91de8b36fdbb91f6a607070f001feb78f73d84be33850aa4bcffa60caa1fd049211797c861cf6c1442d97cc0d8a7c37360b"
+  },
+  {
+    "kind": "news",
+    "id": "30e106996971a1ff5c5272c516b7a35f",
+    "data": {
+      "version": "0.4.0",
+      "notes": [
+        "Snake en tiempo real, chat P2P y arenas que llegan por la red"
+      ]
+    },
+    "sig": "870fa7f7a7f7eef1b8eed96459f193bc5c21366ccfe1d803219b8d9303efce611fc994c6989b79c7f1560ba20c1c3c736ee8e40fa88311b3fddafa0517d0c903"
+  }
+]
