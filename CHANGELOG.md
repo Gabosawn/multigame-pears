@@ -107,3 +107,15 @@
 
 - Flag --no-bluetooth: buscar rival solo por internet, para jugar estable
   mientras el BLE de Linux madura
+
+---
+
+## v0.4.3
+
+### Fixes
+
+- El duelo por Bluetooth conectaba ~2 segundos y se caía en loop: al retirar
+  el canal redundante del doble marcado, se cortaba el enlace físico de radio
+  que en Linux comparten las dos direcciones — matando también al canal
+  ganador. El puente ya no corta el radio: el enlace huérfano se limpia solo
+  cuando ambos extremos lo sueltan
